@@ -1,19 +1,20 @@
 package main
 
 import (
-    "encoding/json"
-    "errors"
-    "fmt"
-    "io/ioutil"
-    "log"
-    "net/http"
-    "os"
-    "strings"
-    "time"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"os"
+	"strings"
+	"time"
 
-    "github.com/cavaliergopher/grab/v3"
-    "github.com/gorilla/websocket"
-    "github.com/inconshreveable/go-update"
+	"github.com/cavaliergopher/grab/v3"
+	"github.com/gorilla/websocket"
+	"github.com/inconshreveable/go-update"
 )
 
 var upgrader = websocket.Upgrader{
@@ -24,6 +25,9 @@ var upgrader = websocket.Upgrader{
 var name string = "assistant-d-installation"
 var cdnPath string = "https://storage.googleapis.com/omsistuff-cdn/programs/autodl/repaints/"
 var executable string = "https://firebasestorage.googleapis.com/v0/b/objects-omsistuff.appspot.com/o/programs%2F" + name + ".exe"
+
+var isShutdown bool = false
+var canShutdown bool = false
 
 type FirebaseStorage struct {
     Md5Hash string
@@ -147,13 +151,15 @@ Loop:
     // check for errors
     if err := resp.Err(); err != nil {
         fmt.Fprintf(os.Stderr, "Download failed: %v\n", err)
-        os.Exit(1)
+        exit()
     }
 
     fmt.Printf("Download saved to ./%v \n", resp.Filename)
 }
 
 func wsEndpoint(w http.ResponseWriter, r *http.Request) {
+    canShutdown = false
+
     upgrader.CheckOrigin = func(r *http.Request) bool { return true }
 
     ws, err := upgrader.Upgrade(w, r, nil)
@@ -180,15 +186,40 @@ func wsEndpoint(w http.ResponseWriter, r *http.Request) {
         downloadFile(msg, ws)
     }
 
-    os.Exit(0)
+    canShutdown = true
 
+    exit()
+}
+
+func exit() {
+    if isShutdown || !canShutdown {
+        return
+    }
+
+    isShutdown = true
+
+    doUpdate()
+    os.Exit(0)
 }
 
 func main() {
-    doUpdate()
     fmt.Printf("Assistant d'installation version - (c) Omsistuff 2022\n")
     fmt.Println("Starting local server on port 5300")
+
     http.HandleFunc("/", wsEndpoint)
 
-    log.Fatal(http.ListenAndServe(":5300", nil))
+    srv := &http.Server{
+        Addr: ":5300",
+    }
+    
+    go func() {
+        httpError := srv.ListenAndServe()
+        if httpError != nil {
+            log.Println("While serving HTTP: ", httpError)
+        }
+    }()
+    
+    time.Sleep(time.Second * 15)
+    srv.Shutdown(context.Background())
+    exit()
 }
