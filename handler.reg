@@ -1,0 +1,14 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_CLASSES_ROOT\omsistuffinstallassist]
+@="Omsistuff installation automatique"
+"URL Protocol"=""
+
+[HKEY_CLASSES_ROOT\omsistuffinstallassist\shell]
+@=""
+
+[HKEY_CLASSES_ROOT\omsistuffinstallassist\shell\open]
+@=""
+
+[HKEY_CLASSES_ROOT\omsistuffinstallassist\shell\open\command]
+@="c:\\Program Files (x86)\\Steam\\steamapps\\common\\OMSI 2\\assistant-d-installation.exe \"%1\""
