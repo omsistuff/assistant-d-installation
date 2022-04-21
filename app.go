@@ -285,7 +285,7 @@ func exit(errCode ...string) {
     }
 
     if len(errCode) > 0 {
-        browser.OpenURL("https://omsistuff.fr/adi?error=" + errCode[0])
+        browser.OpenURL("https://omsistuff.fr/assistant-d-installation?error=" + errCode[0])
     }
 
     isShutdown = true
