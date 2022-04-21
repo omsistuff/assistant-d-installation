@@ -2,7 +2,6 @@ package main
 
 import (
 	"archive/zip"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -191,6 +190,10 @@ func awaitMessage(conn *websocket.Conn) (msg string, err error) {
     }
 }
 
+func sendMessage(conn *websocket.Conn, msg string) {
+    conn.WriteMessage(1, []byte(msg))
+}
+
 func downloadFile(url string, conn *websocket.Conn) string {
     // create client
     client := grab.NewClient()
@@ -209,7 +212,7 @@ Loop:
     for {
         select {
         case <-t.C:
-            conn.WriteMessage(1, []byte(fmt.Sprintf("%.2f", 100*resp.Progress())))
+            sendMessage(conn, fmt.Sprintf("download:progress=%.2f", 100*resp.Progress()))
 
         case <-resp.Done:
             // download is complete
@@ -242,8 +245,7 @@ func wsEndpoint(w http.ResponseWriter, r *http.Request) {
         log.Println(err)
     }
 
-    ws.WriteMessage(1, []byte("tld:request_download_link"))
-
+    sendMessage(ws, "need:download_link")
     msg, err := awaitMessage(ws)
 
     if err != nil {
@@ -254,8 +256,12 @@ func wsEndpoint(w http.ResponseWriter, r *http.Request) {
     if !strings.HasPrefix(msg, cdnPath) {
         exit("invalid_link")
     }
-    
+
+
+    sendMessage(ws, "download:start")
     fileName := downloadFile(msg, ws)
+
+    sendMessage(ws, "archive:start")
     tmpFolder := ".fr.omsistuff.tmp"
     err = Unzip(fileName, tmpFolder)
 
@@ -269,6 +275,7 @@ func wsEndpoint(w http.ResponseWriter, r *http.Request) {
     os.Remove(fileName)
 
     canShutdown = true
+    sendMessage(ws, "archive:done")
     exit()
 }
 
@@ -305,6 +312,5 @@ func main() {
     }()
     
     time.Sleep(time.Second * 15)
-    srv.Shutdown(context.Background())
     exit()
 }
