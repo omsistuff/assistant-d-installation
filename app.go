@@ -1,41 +1,99 @@
 package main
 
 import (
+    "encoding/json"
     "errors"
     "fmt"
-    "github.com/blang/semver"
-    "github.com/cavaliergopher/grab/v3"
-    "github.com/gorilla/websocket"
-    "github.com/rhysd/go-github-selfupdate/selfupdate"
+    "io/ioutil"
     "log"
     "net/http"
     "os"
     "strings"
     "time"
+
+    "github.com/cavaliergopher/grab/v3"
+    "github.com/gorilla/websocket"
+    "github.com/inconshreveable/go-update"
 )
 
-var upgrader = websocket.Upgrader {
+var upgrader = websocket.Upgrader{
     ReadBufferSize:  1024,
     WriteBufferSize: 1024,
 }
 
+var name string = "assistant-d-installation"
 var cdnPath string = "https://storage.googleapis.com/omsistuff-cdn/programs/autodl/repaints/"
+var executable string = "https://firebasestorage.googleapis.com/v0/b/objects-omsistuff.appspot.com/o/programs%2F" + name + ".exe"
 
-const version = "0.0.1"
+type FirebaseStorage struct {
+    Md5Hash string
+}
 
-func doSelfUpdate() {
-    v := semver.MustParse(version)
-    latest, err := selfupdate.UpdateSelf(v, "omsistuff/assistant-d-installation")
+func getJson(url string, target interface{}) error {
+    var client = &http.Client{Timeout: 10 * time.Second}
+
+    r, err := client.Get(url)
     if err != nil {
-        log.Println("Binary update failed:", err)
+        return err
+    }
+    defer r.Body.Close()
+
+    return json.NewDecoder(r.Body).Decode(target)
+}
+
+func getLastChecksum() string {
+    firebaseStorage := FirebaseStorage{}
+    getJson(executable, &firebaseStorage)
+    return firebaseStorage.Md5Hash
+}
+
+func isLastVersion() bool {
+    hashFile := fmt.Sprintf(".%v.md5", name)
+
+    localChecksum := ""
+    data, err := ioutil.ReadFile(hashFile)
+    if err == nil {
+        localChecksum = string(data)
+        fmt.Printf("Local checksum: %v\n", localChecksum)
+    }
+
+    onlineChecksum := getLastChecksum()
+
+    file, err := os.Create(hashFile)
+
+    if err != nil {
+        log.Fatalf("failed creating file: %s", err)
+    }
+
+    defer file.Close()
+
+    _, err = file.WriteString(onlineChecksum)
+
+    fmt.Printf("Online checksum: %v\n", onlineChecksum)
+
+    if err != nil {
+        log.Fatalf("failed writing to file: %s", err)
+    }
+
+    return localChecksum == onlineChecksum
+}
+
+func doUpdate() {
+    if isLastVersion() {
+        fmt.Println("No update available")
         return
     }
-    if latest.Version.Equals(v) {
-        // latest version is the same as current version. It means current binary is up to date.
-        log.Println("Current binary is the latest version", version)
-    } else {
-        log.Println("Successfully updated to version", latest.Version)
-        log.Println("Release note:\n", latest.ReleaseNotes)
+
+    fmt.Println("New update available")
+
+    resp, err := http.Get(executable + "?alt=media")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer resp.Body.Close()
+    err = update.Apply(resp.Body, update.Options{})
+    if err != nil {
+        log.Fatal(err)
     }
 }
 
@@ -127,8 +185,8 @@ func wsEndpoint(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-    fmt.Printf("Assistant d'installation version %v - (c) Omsistuff 2022\n", version)
-    doSelfUpdate()
+    doUpdate()
+    fmt.Printf("Assistant d'installation version - (c) Omsistuff 2022\n")
     fmt.Println("Starting local server on port 5300")
     http.HandleFunc("/", wsEndpoint)
 
