@@ -31,7 +31,7 @@ var cdnPath string = "https://storage.googleapis.com/omsistuff-cdn/programs/auto
 var executable string = "https://firebasestorage.googleapis.com/v0/b/objects-omsistuff.appspot.com/o/programs%2F" + name + ".exe"
 
 var isShutdown bool = false
-var canShutdown bool = false
+var canShutdown bool = true
 
 type FirebaseStorage struct {
     Md5Hash string
