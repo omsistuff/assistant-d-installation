@@ -223,7 +223,7 @@ Loop:
     // check for errors
     if err := resp.Err(); err != nil {
         fmt.Fprintf(os.Stderr, "Download failed: %v\n", err)
-        exit()
+        exit("download_failed")
     }
 
     return resp.Filename
@@ -235,12 +235,6 @@ func wsEndpoint(w http.ResponseWriter, r *http.Request) {
     upgrader.CheckOrigin = func(r *http.Request) bool { return true }
 
     ws, err := upgrader.Upgrade(w, r, nil)
-    if err != nil {
-        log.Println(err)
-    }
-
-    log.Println("Client Connected")
-    err = ws.WriteMessage(1, []byte("Hi Client!"))
     if err != nil {
         log.Println(err)
     }
