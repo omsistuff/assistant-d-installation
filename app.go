@@ -63,7 +63,7 @@ func isLastVersion() bool {
     data, err := ioutil.ReadFile(hashFile)
     if err == nil {
         localChecksum = string(data)
-        fmt.Printf("Local checksum: %v\n", localChecksum)
+        log.Println("Local checksum:", localChecksum)
     }
 
     onlineChecksum := getLastChecksum()
@@ -71,17 +71,19 @@ func isLastVersion() bool {
     file, err := os.Create(hashFile)
 
     if err != nil {
-        log.Fatalf("failed creating file: %s", err)
+        log.Println("failed creating file:", err)
+        exit("failed_creating_file")
     }
 
     defer file.Close()
 
     _, err = file.WriteString(onlineChecksum)
 
-    fmt.Printf("Online checksum: %v\n", onlineChecksum)
+    log.Println("Online checksum:", onlineChecksum)
 
     if err != nil {
-        log.Fatalf("failed writing to file: %s", err)
+        log.Println("failed writing to file:", err)
+        exit("failed_writing_to_file")
     }
 
     return localChecksum == onlineChecksum
@@ -89,11 +91,11 @@ func isLastVersion() bool {
 
 func doUpdate() {
     if isLastVersion() {
-        fmt.Println("No update available")
+        log.Println("No update available")
         return
     }
 
-    fmt.Println("New update available")
+    log.Println("New update available")
 
     resp, err := http.Get(executable + "?alt=media")
     if err != nil {
@@ -104,6 +106,8 @@ func doUpdate() {
     if err != nil {
         log.Fatal(err)
     }
+
+    log.Println("Update applied")
 }
 
 func Unzip(src, dest string) error {
@@ -135,7 +139,7 @@ func Unzip(src, dest string) error {
 
         // Check for ZipSlip (Directory traversal)
         if !strings.HasPrefix(path, filepath.Clean(dest) + string(os.PathSeparator)) {
-            return fmt.Errorf("illegal file path: %s", path)
+            log.Println("illegal file path:", path)
         }
 
         if f.FileInfo().IsDir() {
@@ -223,7 +227,7 @@ Loop:
 
     // check for errors
     if err := resp.Err(); err != nil {
-        fmt.Fprintf(os.Stderr, "Download failed: %v\n", err)
+        log.Println("Download failed:", err)
         exit("download_failed")
     }
 
@@ -260,7 +264,7 @@ func wsEndpoint(w http.ResponseWriter, r *http.Request) {
     err = Unzip(fileName, tmpFolder)
 
     if err != nil {
-        log.Fatal(err)
+        log.Println(err)
         exit("unzip_error")
     }
 
@@ -289,6 +293,21 @@ func exit(errCode ...string) {
 }
 
 func main() {
+
+    LOG_FILE := name + ".log"
+    // open log file
+    logFile, err := os.OpenFile(LOG_FILE, os.O_RDWR|os.O_CREATE, 0644)
+    if err != nil {
+        log.Panic(err)
+    }
+    defer logFile.Close()
+
+    // Set log out put and enjoy :)
+    log.SetOutput(logFile)
+
+    // optional: log date-time, filename, and line number
+    log.SetFlags(log.Lshortfile | log.LstdFlags)
+
     fmt.Printf("Assistant d'installation version - (c) Omsistuff 2022\n")
     fmt.Println("Starting local server on port 5300")
 
@@ -301,7 +320,7 @@ func main() {
     go func() {
         httpError := srv.ListenAndServe()
         if httpError != nil {
-            log.Println("While serving HTTP: ", httpError)
+            log.Println("While serving HTTP:", httpError)
         }
     }()
     
