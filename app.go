@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"crypto/md5"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,8 +28,7 @@ var upgrader = websocket.Upgrader{
 }
 
 var name string = "assistant-d-installation"
-var cdnPath string = "https://storage.googleapis.com/omsistuff-cdn/programs/autodl/repaints/"
-var newCdnPath string = "https://omsistuff.fr/static/gr/"
+var verifierUrl string = "https://omsistuff.fr/external/autodl/isVerifiedFile?md5="
 var executable string = "https://firebasestorage.googleapis.com/v0/b/objects-omsistuff.appspot.com/o/programs%2F" + name + ".exe"
 
 var isShutdown bool = false
@@ -234,6 +234,37 @@ Loop:
     return resp.Filename
 }
 
+func isVerifiedFile(filename string) bool {
+    f, err := os.Open(filename)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    defer f.Close()
+    h := md5.New()
+    if _, err := io.Copy(h, f); err != nil {
+        log.Fatal(err)
+    }
+    hash := fmt.Sprintf("%x", h.Sum(nil))
+
+    url := verifierUrl + hash
+
+    log.Println("verify file hash:", url)
+
+    response, err := http.Get(url)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer response.Body.Close()
+
+    responseData, err := ioutil.ReadAll(response.Body)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    return string(responseData) == "true"
+}
+
 func wsEndpoint(w http.ResponseWriter, r *http.Request) {
     canShutdown = false
 
@@ -252,12 +283,15 @@ func wsEndpoint(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    if !strings.HasPrefix(msg, cdnPath) && !strings.HasPrefix(msg, newCdnPath) {
-        exit("invalid_link")
-    }
-
     sendMessage(ws, "download:start")
     fileName := downloadFile(msg, ws)
+
+    if (!isVerifiedFile(fileName)) {
+        os.Remove(fileName)
+        sendMessage(ws, "err:must_revalidate")
+        exit("must_revalidate")
+        return
+    }
 
     sendMessage(ws, "archive:start")
     tmpFolder := ".fr.omsistuff.tmp"
@@ -314,7 +348,7 @@ func main() {
     // optional: log date-time, filename, and line number
     log.SetFlags(log.Lshortfile | log.LstdFlags)
 
-    fmt.Printf("Assistant d'installation version - (c) Omsistuff 2022\n")
+    fmt.Printf("Assistant d'installation (c) Omsistuff 2022\n")
     fmt.Println("Starting local server on port 5300")
 
     http.HandleFunc("/", wsEndpoint)
