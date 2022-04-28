@@ -312,15 +312,17 @@ func wsEndpoint(w http.ResponseWriter, r *http.Request) {
 }
 
 func exit(errCode ...string) {
+    fmt.Println(canShutdown)
+
     if isShutdown || !canShutdown {
         return
     }
 
+    isShutdown = true
+
     if len(errCode) > 0 {
         browser.OpenURL("https://omsistuff.fr/assistant-d-installation?error=" + errCode[0])
     }
-
-    isShutdown = true
 
     doUpdate()
     os.Exit(0)
@@ -364,6 +366,9 @@ func main() {
         }
     }()
     
-    time.Sleep(time.Second * 15)
-    exit()
+    for {
+        // try to close program every 15 seconds
+        time.Sleep(time.Second * 15)
+        exit()
+    }
 }
