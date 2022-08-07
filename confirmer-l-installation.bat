@@ -1,3 +1,3 @@
 @echo off
-powershell -Command "Start-Process '%~dp0%assistant-d-installation.exe' -Verb runAs"
+powershell -Command "cd '%~dp0%' ;Start-Process .\assistant-d-installation.exe -Verb runAs"
 exit
